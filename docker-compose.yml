@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  redis-db:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - iot-network
+
+  telemetry-backend:
+    build: ./telemetry-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_ADDR=redis-db:6379
+    depends_on:
+      - redis-db
+    networks:
+      - iot-network
+
+  condition-monitor:
+    build: ./condition-monitor
+    environment:
+      - BACKEND_URL=http://telemetry-backend:8080/ingest
+    depends_on:
+      - telemetry-backend
+    networks:
+      - iot-network
+
+networks:
+  iot-network:
+    driver: bridge

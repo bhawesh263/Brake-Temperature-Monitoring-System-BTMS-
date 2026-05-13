@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+bin/
+*.o
+*.a
+*.so
+
+# Go artifacts
+telemetry-backend/telemetry-backend
+telemetry-backend/main
+telemetry-backend/history.json
+
+# IDEs and System files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Docker logs
+*.log
