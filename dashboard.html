@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmbedSim Safety Diagnostics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --bg: #0b0f1a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --status-normal: #10b981;
+            --status-warning: #f59e0b;
+            --status-critical: #ef4444;
+            --status-safefail: #64748b;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(192, 132, 252, 0.05) 0%, transparent 40%);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .summary-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 1400px;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 2rem;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        .machine-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .status-badge {
+            padding: 0.6rem 1.25rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .status-normal { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-critical { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .status-safe_fail { 
+            background: rgba(100, 116, 139, 0.2); 
+            color: #94a3b8; 
+            border: 2px dashed #64748b;
+            animation: warningPulse 1s infinite alternate;
+        }
+
+        @keyframes warningPulse {
+            from { border-color: #64748b; }
+            to { border-color: #ef4444; }
+        }
+
+        .chart-wrapper { height: 250px; width: 100%; }
+        
+        .fault-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 26, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            border-radius: 2rem;
+        }
+
+        .safe_fail .fault-overlay { display: flex; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <h1>EmbedSim Analytics</h1>
+            <p>High-Fidelity Safety Monitoring System</p>
+        </div>
+    </header>
+
+    <div class="summary-bar">
+        <div class="stat-card"><span class="label">Total Nodes</span><span class="value" id="total-nodes">0</span></div>
+        <div class="stat-card"><span class="label" style="color: var(--status-warning)">Warnings</span><span class="value" id="warning-nodes">0</span></div>
+        <div class="stat-card"><span class="label" style="color: var(--status-critical)">Anomalies</span><span class="value" id="critical-nodes">0</span></div>
+        <div class="stat-card"><span class="label" style="color: #94a3b8">Safe Failures</span><span class="value" id="safe-fails">0</span></div>
+    </div>
+
+    <div class="dashboard-grid" id="dashboard"></div>
+
+    <script>
+        const charts = {};
+
+        async function poll() {
+            try {
+                const res = await fetch('http://localhost:8080/status');
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) {}
+        }
+
+        function updateUI(data) {
+            const keys = Object.keys(data);
+            const container = document.getElementById('dashboard');
+            
+            document.getElementById('total-nodes').innerText = keys.length;
+            document.getElementById('warning-nodes').innerText = keys.filter(k => data[k].current_state === 'WARNING').length;
+            document.getElementById('critical-nodes').innerText = keys.filter(k => data[k].current_state === 'CRITICAL').length;
+            document.getElementById('safe-fails').innerText = keys.filter(k => data[k].current_state === 'SAFE_FAIL').length;
+
+            keys.forEach(id => {
+                let card = document.getElementById(`card-${id}`);
+                if (!card) {
+                    card = document.createElement('div');
+                    card.id = `card-${id}`;
+                    card.className = 'machine-card';
+                    card.innerHTML = `
+                        <div class="fault-overlay">
+                            <h3 style="color: #f87171">🛑 SYSTEM HALTED</h3>
+                            <p style="color: #94a3b8">Communication Fault Detected</p>
+                        </div>
+                        <div class="card-top">
+                            <div class="machine-id"><h2>${id}</h2><p>Industrial Edge Node</p></div>
+                            <div id="status-${id}" class="status-badge">STANDBY</div>
+                        </div>
+                        <div class="chart-wrapper"><canvas id="chart-${id}"></canvas></div>
+                    `;
+                    container.appendChild(card);
+                    initChart(id);
+                }
+
+                const machine = data[id];
+                card.className = `machine-card ${machine.current_state.toLowerCase()}`;
+                document.getElementById(`status-${id}`).innerText = machine.current_state;
+                document.getElementById(`status-${id}`).className = `status-badge status-${machine.current_state.toLowerCase()}`;
+                updateChart(id, machine.history);
+            });
+        }
+
+        function initChart(id) {
+            const ctx = document.getElementById(`chart-${id}`).getContext('2d');
+            charts[id] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Telemetry',
+                        data: [],
+                        borderColor: '#818cf8',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b' } },
+                        x: { display: false }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function updateChart(id, history) {
+            const chart = charts[id];
+            chart.data.labels = history.map((_, i) => i);
+            chart.data.datasets[0].data = history.map(h => h.raw_value);
+            chart.update('none');
+        }
+
+        setInterval(poll, 1000);
+        poll();
+    </script>
+</body>
+</html>
