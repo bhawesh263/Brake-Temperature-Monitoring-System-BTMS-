@@ -1,23 +1,22 @@
-#include <iostream>
-#include <vector>
-#include <string>
-#include <sstream>
 #include <thread>
 #include <chrono>
 #include <cstdlib>
-#include "MovingAverage.h"
-#include "StateMachine.h"
-#include "drivers/VirtualDrivers.h"
+#include "../include/MovingAverage.h"
+#include "../include/StateMachine.h"
+#include "../include/Utils.h"
+#include "../include/drivers/VirtualDrivers.h"
 
 namespace config {
     const uint32_t SAMPLE_RATE_MS = 100;
     const uint32_t CAN_BROADCAST_RATE_MS = 500;
     const uint32_t WATCHDOG_TIMEOUT_MS = 200;
     const uint8_t MAX_SENSOR_FAILURES = 3;
+    // TODO: Move these to a .json config file or environment variables for dynamic scaling
 }
 
 class SafetyMonitorApp {
 private:
+    std::string nodeId;
     VirtualI2CSensor sensor;
     VirtualCANDriver canBus;
     MovingAverage filter;
@@ -40,19 +39,30 @@ private:
     void enterSafeMode() {
         if (!isSystemInSafeMode) {
             isSystemInSafeMode = true;
-            uint8_t failData[2] = {0xEE, 0x0F};
-            canBus.sendFrame(0x123, failData, 2);
+            // Notify other nodes on the CAN bus about the failure
+            uint8_t failData[4] = {0xEE, 0xEE, 0x0F, 0x00};
+            failData[3] = utils::calculateCRC8(failData, 3);
+            canBus.sendFrame(nodeId, 0x123, failData, 4);
         }
     }
 
+    bool performPOST() {
+        // Power-On Self Test: Simulating RAM/Flash integrity check (Safety Req SR-03)
+        // FIXME: Implement actual checksum verification for the firmware image
+        return true; 
+    }
+
 public:
-    SafetyMonitorApp() : filter(5), stateMachine(80.0f, 120.0f) {}
+    SafetyMonitorApp(std::string id) : nodeId(id), filter(5), stateMachine(80.0f, 120.0f) {}
 
     void run() {
+        if (!performPOST()) return;
         if (!sensor.init() || !canBus.init()) return;
 
         while (true) {
-            if (loopCounter == 50) sensor.triggerFault();
+            // Optional: Uncomment for fault-injection testing
+            // if (loopCounter == 50) sensor.triggerFault();
+
 
             if (!isSystemInSafeMode) {
                 uint8_t rawData[2];
@@ -65,11 +75,16 @@ public:
                     stateMachine.update(filteredTemp);
 
                     if (lastCanBroadcast >= config::CAN_BROADCAST_RATE_MS) {
-                        uint8_t canData[2];
-                        canData[0] = static_cast<uint8_t>(filteredTemp);
-                        canData[1] = (stateMachine.getStateName() == "NORMAL") ? 0 : 
+                        uint8_t canData[4];
+                        canData[0] = static_cast<uint8_t>(tempC);
+                        canData[1] = static_cast<uint8_t>(filteredTemp);
+                        
+                        // Map internal state to CAN status byte
+                        canData[2] = (stateMachine.getStateName() == "NORMAL") ? 0 : 
                                      (stateMachine.getStateName() == "WARNING") ? 1 : 2;
-                        canBus.sendFrame(0x123, canData, 2);
+                        
+                        canData[3] = utils::calculateCRC8(canData, 3);
+                        canBus.sendFrame(nodeId, 0x123, canData, 4);
                         lastCanBroadcast = 0;
                     }
                 } else {
@@ -79,8 +94,9 @@ public:
                 }
             } else {
                 if (lastCanBroadcast >= config::CAN_BROADCAST_RATE_MS) {
-                    uint8_t canData[2] = {0xEE, 0x0F};
-                    canBus.sendFrame(0x123, canData, 2);
+                    uint8_t canData[4] = {0xEE, 0xEE, 0x0F, 0x00};
+                    canData[3] = utils::calculateCRC8(canData, 3);
+                    canBus.sendFrame(nodeId, 0x123, canData, 4);
                     lastCanBroadcast = 0;
                 }
             }
@@ -96,8 +112,12 @@ public:
     }
 };
 
-int main() {
-    SafetyMonitorApp app;
+int main(int argc, char** argv) {
+    std::string nodeId = "CAN-NODE-01";
+    if (argc > 1) {
+        nodeId = argv[1];
+    }
+    SafetyMonitorApp app(nodeId);
     app.run();
     return 0;
 }

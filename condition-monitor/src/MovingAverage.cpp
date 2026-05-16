@@ -1,4 +1,4 @@
-#include "MovingAverage.h"
+#include "../include/MovingAverage.h"
 
 MovingAverage::MovingAverage(int size) {
     windowSize = size;

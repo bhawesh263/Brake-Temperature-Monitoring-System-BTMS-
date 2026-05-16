@@ -19,7 +19,7 @@ class ICANDriver {
 public:
     virtual ~ICANDriver() = default;
     virtual bool init() = 0;
-    virtual bool sendFrame(uint32_t id, const uint8_t* data, uint8_t len) = 0;
+    virtual bool sendFrame(const std::string& machineId, uint32_t id, const uint8_t* data, uint8_t len) = 0;
     virtual bool receiveFrame(uint32_t& id, uint8_t* data, uint8_t& len) = 0;
 };
 

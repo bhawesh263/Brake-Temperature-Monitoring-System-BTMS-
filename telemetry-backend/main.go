@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +14,7 @@ import (
 var ctx = context.Background()
 var rdb *redis.Client
 
+// SensorPayload represents the incoming telemetry data from an edge node.
 type SensorPayload struct {
 	MachineID     string  `json:"machine_id"`
 	RawValue      float64 `json:"raw_value"`
@@ -30,6 +30,8 @@ type MachineStatus struct {
 }
 
 var (
+	// machines holds the in-memory state of all active nodes.
+	// In a production environment, this should be moved entirely to Redis or a database.
 	dataMutex sync.RWMutex
 	machines  = make(map[string]*MachineStatus)
 )
@@ -39,18 +41,25 @@ const historyFile = "history.json"
 func loadHistory() {
 	data, err := os.ReadFile(historyFile)
 	if err != nil {
+		log.Printf("No history file found (%s). Starting fresh.", historyFile)
 		return
 	}
 	dataMutex.Lock()
-	json.Unmarshal(data, &machines)
-	dataMutex.Unlock()
+	defer dataMutex.Unlock()
+	if err := json.Unmarshal(data, &machines); err != nil {
+		log.Printf("Failed to unmarshal history: %v", err)
+	}
 }
 
 func saveHistory() {
 	dataMutex.RLock()
-	data, _ := json.Marshal(machines)
+	data, err := json.Marshal(machines)
 	dataMutex.RUnlock()
-	os.WriteFile(historyFile, data, 0644)
+	if err != nil {
+		log.Printf("Error marshaling history: %v", err)
+		return
+	}
+	_ = os.WriteFile(historyFile, data, 0644)
 }
 
 func IngestionHandler(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +125,16 @@ func main() {
 	http.HandleFunc("/status", StatusHandler)
 	http.HandleFunc("/health", HealthHandler)
 
-	log.Printf("Server starting on :8080 (Redis: %s)", redisAddr)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Printf("Telemetry Hub initialized. Listening on :8080")
+	if redisAddr != "" {
+		log.Printf("Persistence Layer: Redis @ %s", redisAddr)
+	}
+
+	server := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	log.Fatal(server.ListenAndServe())
 }

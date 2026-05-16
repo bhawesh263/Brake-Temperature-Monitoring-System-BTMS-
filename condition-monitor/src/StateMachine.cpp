@@ -1,4 +1,5 @@
-#include "StateMachine.h"
+#include "../include/StateMachine.h"
+#include <string>
 
 StateMachine::StateMachine(float warnLimit, float errorLimit) {
     warningThreshold = warnLimit;

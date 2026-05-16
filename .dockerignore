@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+.idea
+*.log
+condition-monitor/build
+telemetry-backend/history.json
+telemetry-backend/telemetry-backend
+node_modules
+.DS_Store

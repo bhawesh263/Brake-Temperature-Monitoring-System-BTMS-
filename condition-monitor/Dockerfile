@@ -14,9 +14,11 @@ WORKDIR /app
 COPY . .
 
 # Build the project
-RUN mkdir build && cd build && \
-    cmake .. && \
-    make
+RUN rm -rf build && \
+    cmake -B build -S . && \
+    cmake --build build
+
+
 
 # Runtime stage
 FROM alpine:latest
