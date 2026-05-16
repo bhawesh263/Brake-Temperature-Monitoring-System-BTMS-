@@ -55,3 +55,38 @@ Access the dashboard at `http://localhost/dashboard.html` (or open the local fil
 - **Persistent History**: The hub automatically saves session data to `history.json` and supports Redis for enterprise-grade persistence.
 - **Multi-Node Support**: Simulate an entire fleet of machines by running multiple instances of the monitor with unique IDs.
 
+## 🛠️ Development & Testing
+
+### Backend (Go)
+Run tests to verify the ingestion logic:
+```bash
+cd telemetry-backend
+go test -v .
+```
+
+### Firmware (C++)
+The project includes a basic unit test for the signal processing logic.
+```bash
+cd condition-monitor/build
+cmake ..
+make
+./moving_average_test
+```
+
+## 🚀 Roadmap
+
+- [ ] **Hardware Abstraction Layer (HAL)**: Transition from virtual drivers to real STM32/ESP32 I2C drivers.
+- [ ] **Auth Layer**: Implement JWT-based authentication for the telemetry ingestion endpoint.
+- [ ] **Grafana Integration**: Export metrics to Prometheus for more advanced visualization.
+- [ ] **Anomaly Detection**: Integrate a basic ML model (e.g., Isolation Forest) in the Go hub to detect subtle hardware failures.
+
+## ⚠️ Known Issues & Troubleshooting
+
+- **Docker Networking**: If the C++ simulation cannot connect to the Go backend when running in Docker, ensure both are on the same bridge network (handled automatically by Docker Compose).
+- **History Persistence**: If `history.json` is not being created, check write permissions in the `telemetry-backend` directory.
+- **Dashboard Refresh**: The dashboard polls every 1 second; for high-frequency data, consider transitioning to WebSockets.
+
+---
+*Developed as a demonstration of safety-critical IoT systems architecture.*
+
+# Brake-Temperature-Monitoring-System-BTMS-
