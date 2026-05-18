@@ -11,7 +11,8 @@
 | FR-01 | Sensor Sampling | The system shall sample brake temperature via I2C every 100ms. |
 | FR-02 | Data Filtering | The system shall apply a 5-point moving average filter to suppress EMI noise. |
 | FR-03 | State Detection | The system shall identify NORMAL (<80°C), WARNING (80-120°C), and CRITICAL (>120°C) states. |
-| FR-04 | CAN Broadcast | The system shall broadcast the current state and raw values on the CAN Bus (ID: 0x123) every 500ms. |
+| FR-04 | Predictive AI Model | The system shall employ an Online Linear Regression model via Gradient Descent to predict future brake temperatures 10 seconds ahead and fire PREDICTIVE_CRITICAL warnings. |
+| FR-05 | CAN Broadcast | The system shall broadcast the current state and raw values on the CAN Bus (ID: 0x123) every 500ms. |
 
 ## 2. Safety Requirements (SR)
 | ID | Requirement | Description |

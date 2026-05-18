@@ -18,15 +18,21 @@ def run_simulation(node_id, backend_url, interval):
             
             # Simple simulation logic
             filtered_val = raw_val * 0.9 + (base_temp * 0.1)
+            predicted_val = filtered_val + (noise * 1.5) # Simulate AI prediction
             
             state = "NORMAL"
-            if raw_val > 28.5:
+            if predicted_val > 400 and raw_val <= 400:
+                state = "PREDICTIVE_CRITICAL"
+            elif raw_val > 400:
+                state = "CRITICAL"
+            elif raw_val > 200:
                 state = "WARNING"
 
             payload = {
                 "machine_id": node_id,
                 "raw_value": round(raw_val, 2),
                 "filtered_value": round(filtered_val, 2),
+                "predicted_value": round(predicted_val, 2),
                 "system_state": state
             }
 

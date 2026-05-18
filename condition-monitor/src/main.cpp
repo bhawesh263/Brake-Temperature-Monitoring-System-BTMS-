@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "../include/MovingAverage.h"
 #include "../include/StateMachine.h"
+#include "../include/PredictiveModel.h"
 #include "../include/Utils.h"
 #include "../include/drivers/VirtualDrivers.h"
 
@@ -21,6 +22,9 @@ private:
     VirtualCANDriver canBus;
     MovingAverage filter;
     StateMachine stateMachine;
+    PredictiveModel aiModel;
+    
+    float timeSeconds = 0.0f;
     
     uint32_t lastCanBroadcast = 0;
     uint32_t lastWatchdogKick = 0;
@@ -28,12 +32,16 @@ private:
     bool isSystemInSafeMode = false;
     uint32_t loopCounter = 0;
 
+    std::chrono::steady_clock::time_point lastWatchdogKickTime;
+
     void kickWatchdog() {
-        lastWatchdogKick = 0;
+        lastWatchdogKickTime = std::chrono::steady_clock::now();
     }
 
     bool checkSafety() {
-        return lastWatchdogKick <= config::WATCHDOG_TIMEOUT_MS;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastWatchdogKickTime).count();
+        return elapsed <= config::WATCHDOG_TIMEOUT_MS;
     }
 
     void enterSafeMode() {
@@ -53,7 +61,9 @@ private:
     }
 
 public:
-    SafetyMonitorApp(std::string id) : nodeId(id), filter(5), stateMachine(80.0f, 120.0f) {}
+    SafetyMonitorApp(std::string id) : nodeId(id), filter(5), stateMachine(200.0f, 400.0f), aiModel(0.005f, 50, 20) {
+        kickWatchdog(); // Initialize watchdog time
+    }
 
     void run() {
         if (!performPOST()) return;
@@ -71,8 +81,22 @@ public:
                     
                     int16_t rawVal = (rawData[0] << 8) | rawData[1];
                     float tempC = rawVal / 100.0f;
+                    
+                    // 30-second fault-injection scenario: aggressive thermal runaway
+                    // Starts at 10 seconds (loopCounter 100), ramps up linearly
+                    if (loopCounter >= 100 && loopCounter <= 400) {
+                        tempC += (loopCounter - 100) * 2.5f; 
+                    }
+                    
                     float filteredTemp = filter.process(tempC);
-                    stateMachine.update(filteredTemp);
+                    
+                    timeSeconds += config::SAMPLE_RATE_MS / 1000.0f;
+                    aiModel.addDataPoint(timeSeconds, filteredTemp);
+                    
+                    // Predict 10 seconds into the future
+                    float predictedTemp = aiModel.predict(timeSeconds + 10.0f);
+
+                    stateMachine.update(filteredTemp, predictedTemp);
 
                     if (lastCanBroadcast >= config::CAN_BROADCAST_RATE_MS) {
                         uint8_t canData[4];
@@ -81,7 +105,8 @@ public:
                         
                         // Map internal state to CAN status byte
                         canData[2] = (stateMachine.getStateName() == "NORMAL") ? 0 : 
-                                     (stateMachine.getStateName() == "WARNING") ? 1 : 2;
+                                     (stateMachine.getStateName() == "WARNING") ? 1 : 
+                                     (stateMachine.getStateName() == "PREDICTIVE_CRITICAL") ? 3 : 2;
                         
                         canData[3] = utils::calculateCRC8(canData, 3);
                         canBus.sendFrame(nodeId, 0x123, canData, 4);
@@ -101,12 +126,11 @@ public:
                 }
             }
 
-            kickWatchdog();
             if (!checkSafety()) break;
+            kickWatchdog();
 
             std::this_thread::sleep_for(std::chrono::milliseconds(config::SAMPLE_RATE_MS));
             lastCanBroadcast += config::SAMPLE_RATE_MS;
-            lastWatchdogKick += config::SAMPLE_RATE_MS;
             loopCounter++;
         }
     }

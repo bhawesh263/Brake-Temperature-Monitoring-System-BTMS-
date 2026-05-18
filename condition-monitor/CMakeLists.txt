@@ -10,6 +10,7 @@ add_executable(monitor_sim
     src/main.cpp 
     src/StateMachine.cpp 
     src/MovingAverage.cpp
+    src/PredictiveModel.cpp
 )
 target_include_directories(monitor_sim PRIVATE include)
 

@@ -18,9 +18,10 @@ var rdb *redis.Client
 type SensorPayload struct {
 	MachineID     string  `json:"machine_id"`
 	RawValue      float64 `json:"raw_value"`
-	FilteredValue float64 `json:"filtered_value"`
-	SystemState   string  `json:"system_state"`
-	Timestamp     int64   `json:"timestamp"`
+	FilteredValue  float64 `json:"filtered_value"`
+	PredictedValue float64 `json:"predicted_value,omitempty"`
+	SystemState    string  `json:"system_state"`
+	Timestamp      int64   `json:"timestamp"`
 }
 
 type MachineStatus struct {

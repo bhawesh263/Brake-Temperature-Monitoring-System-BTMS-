@@ -7,6 +7,7 @@
 enum class SystemState {
     NORMAL,
     WARNING,
+    PREDICTIVE_CRITICAL,
     ERROR
 };
 
@@ -22,8 +23,8 @@ public:
     // Constructor
     StateMachine(float warnLimit, float errorLimit);
 
-    // Feed a sensor reading into the state machine to update its state
-    void update(float sensorValue);
+    // Feed a sensor reading and predicted future reading into the state machine
+    void update(float sensorValue, float predictedValue = 0.0f);
 
     // Get the current state as a readable word
     std::string getStateName() const;

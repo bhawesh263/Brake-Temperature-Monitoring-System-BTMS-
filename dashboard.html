@@ -17,6 +17,7 @@
             --status-normal: #10b981;
             --status-warning: #f59e0b;
             --status-critical: #ef4444;
+            --status-predictive_critical: #d946ef;
             --status-safefail: #64748b;
             --glass: rgba(255, 255, 255, 0.03);
             --border: rgba(255, 255, 255, 0.1);
@@ -107,12 +108,18 @@
 
         .status-normal { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
         .status-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-predictive_critical { background: rgba(217, 70, 239, 0.15); color: #e879f9; border: 1px solid rgba(217, 70, 239, 0.3); animation: predictivePulse 1.5s infinite alternate;}
         .status-critical { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
         .status-safe_fail { 
             background: rgba(100, 116, 139, 0.2); 
             color: #94a3b8; 
             border: 2px dashed #64748b;
             animation: warningPulse 1s infinite alternate;
+        }
+
+        @keyframes predictivePulse {
+            from { border-color: rgba(217, 70, 239, 0.3); box-shadow: 0 0 10px rgba(217, 70, 239, 0); }
+            to { border-color: #d946ef; box-shadow: 0 0 15px rgba(217, 70, 239, 0.5); }
         }
 
         @keyframes warningPulse {
@@ -148,6 +155,7 @@
     <div class="summary-bar">
         <div class="stat-card"><span class="label">Total Nodes</span><span class="value" id="total-nodes">0</span></div>
         <div class="stat-card"><span class="label" style="color: var(--status-warning)">Warnings</span><span class="value" id="warning-nodes">0</span></div>
+        <div class="stat-card"><span class="label" style="color: var(--status-predictive_critical)">AI Predictions</span><span class="value" id="predictive-nodes">0</span></div>
         <div class="stat-card"><span class="label" style="color: var(--status-critical)">Anomalies</span><span class="value" id="critical-nodes">0</span></div>
         <div class="stat-card"><span class="label" style="color: #94a3b8">Safe Failures</span><span class="value" id="safe-fails">0</span></div>
     </div>
@@ -171,6 +179,7 @@
             
             document.getElementById('total-nodes').innerText = keys.length;
             document.getElementById('warning-nodes').innerText = keys.filter(k => data[k].current_state === 'WARNING').length;
+            document.getElementById('predictive-nodes').innerText = keys.filter(k => data[k].current_state === 'PREDICTIVE_CRITICAL').length;
             document.getElementById('critical-nodes').innerText = keys.filter(k => data[k].current_state === 'CRITICAL').length;
             document.getElementById('safe-fails').innerText = keys.filter(k => data[k].current_state === 'SAFE_FAIL').length;
 
@@ -227,6 +236,16 @@
                         fill: false,
                         tension: 0.4,
                         pointRadius: 0
+                    },
+                    {
+                        label: 'AI Prediction',
+                        data: [],
+                        borderColor: '#d946ef',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0
                     }]
                 },
                 options: {
@@ -246,6 +265,7 @@
             chart.data.labels = history.map((_, i) => i);
             chart.data.datasets[0].data = history.map(h => h.raw_value);
             chart.data.datasets[1].data = history.map(h => h.filtered_value);
+            chart.data.datasets[2].data = history.map(h => h.predicted_value || h.filtered_value);
             chart.update('none');
         }
 
